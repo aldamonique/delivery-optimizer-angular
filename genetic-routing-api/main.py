@@ -4,6 +4,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
+import matplotlib.pyplot as plt
+import io
+import base64
+
 
 # --- API Metadata ---
 app = FastAPI(
@@ -58,6 +62,7 @@ class VRPSolution(BaseModel):
     found_at_generation: int
     route_details: List[DetailedRoute]
     generation_history: List[GenerationStats]
+    solution_image_base64: str
 
 class ErrorMessage(BaseModel):
     detail: str
@@ -68,9 +73,9 @@ VEHICLES = [
     {'id': 2, 'type': 'medium', 'capacity': 80, 'cost_km': 1.5, 'speed_kmh': 40},
     {'id': 3, 'type': 'large', 'capacity': 100, 'cost_km': 2.0, 'speed_kmh': 40}
 ]
-DEPOT = {'id': 0, 'x': 50, 'y': 50, 'janela': (0, 24)} # Depósito aberto 24h
-SERVICE_TIME_HOURS = 0.25  # 15 minutos de tempo de serviço por cliente
-TIME_PENALTY_FACTOR = 100 # Penalidade alta por violar a janela de tempo
+DEPOT = {'id': 0, 'x': 50, 'y': 50, 'janela': (0, 24)} 
+SERVICE_TIME_HOURS = 0.25  
+TIME_PENALTY_FACTOR = 100 
 
 # --- Genetic Algorithm Parameters ---
 NUM_CUSTOMERS = 20
