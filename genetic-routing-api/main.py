@@ -1,264 +1,397 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any
 import random
 import math
-     
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List
+
 # --- API Metadata ---
 app = FastAPI(
     title="Vehicle Routing Problem (VRP) Optimization API",
-    description="Uses a Genetic Algorithm to solve the Vehicle Routing Problem.",
-    version="1.1.0"
+    description="Uses a Genetic Algorithm with Time Windows to solve the VRP.",
+    version="3.0.0"
 )
-origins = [
-    "http://localhost:4200",
-]
+
+origins = ["http://localhost:4200"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, 
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], 
-    allow_headers=["*"], 
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# --- Pydantic Models for API Response Structure ---
+# --- Pydantic Models ---
 
-class RotaDetalhada(BaseModel):
-    """Define a estrutura de uma única rota para a resposta da API."""
-    id_veiculo: int
-    tipo_veiculo: str
-    trajeto: List[int]
-    demanda_total: int
-    distancia_km: float
-    custo_rota: float
+class TimeWindow(BaseModel):
+    start: float
+    end: float
 
-class SolucaoVRP(BaseModel):
-    """Define a estrutura da resposta final da API."""
-    melhor_custo_total: float
-    geracao_encontrado: int
-    detalhes_rotas: List[RotaDetalhada]
-    
-class MensagemErro(BaseModel):
-    """Modelo para quando uma solução não é encontrada."""
-    detalhe: str
+class PointData(BaseModel):
+    id: int
+    x: int
+    y: int
+    demand: int
+    window: TimeWindow
 
-# =============================================================================
-# ETAPA 2: CONFIGURAÇÃO DO CENÁRIO E PARÂMETROS
-# =============================================================================
+class ProblemData(BaseModel):
+    depot: PointData
+    customers: List[PointData]
 
-# Define uma semente para o gerador de números aleatórios.
-# Isso garante que os mesmos clientes sejam gerados a cada execução,
-# tornando os resultados comparáveis. Remova se quiser aleatoriedade total.
-random.seed(42)
+class DetailedRoute(BaseModel):
+    vehicle_id: int
+    vehicle_type: str
+    path: List[int]
+    total_demand: int
+    distance_km: float
+    route_cost: float
+    arrival_times: List[str]
 
-VEICULOS = [
-    {'id': 1, 'tipo': 'pequeno', 'capacidade': 80, 'custo_km': 1.2},
-    {'id': 2, 'tipo': 'médio', 'capacidade': 110, 'custo_km': 1.5},
-    {'id': 3, 'tipo': 'grande', 'capacidade': 150, 'custo_km': 2.0}
+class GenerationStats(BaseModel):
+    generation_number: int
+    best_cost: float
+    average_cost: float
+
+class VRPSolution(BaseModel):
+    best_total_cost: float
+    found_at_generation: int
+    route_details: List[DetailedRoute]
+    generation_history: List[GenerationStats]
+
+class ErrorMessage(BaseModel):
+    detail: str
+
+# --- Data and Constants ---
+VEHICLES = [
+    {'id': 1, 'type': 'small', 'capacity': 60, 'cost_km': 1.2, 'speed_kmh': 40},
+    {'id': 2, 'type': 'medium', 'capacity': 80, 'cost_km': 1.5, 'speed_kmh': 40},
+    {'id': 3, 'type': 'large', 'capacity': 100, 'cost_km': 2.0, 'speed_kmh': 40}
 ]
-DEPOSITO = {'id': 0, 'x': 50, 'y': 50}
+DEPOT = {'id': 0, 'x': 50, 'y': 50, 'janela': (0, 24)} # Depósito aberto 24h
+SERVICE_TIME_HOURS = 0.25  # 15 minutos de tempo de serviço por cliente
+TIME_PENALTY_FACTOR = 100 # Penalidade alta por violar a janela de tempo
 
-# Parâmetros do Algoritmo Genético
-NUM_CLIENTES = 20
-MAPA_X = 100
-MAPA_Y = 100
-TAMANHO_POPULACAO = 150
-NUM_GERACOES = 1000  # Reduzido para uma resposta mais rápida na API
-TAXA_MUTACAO = 0.5
+# --- Genetic Algorithm Parameters ---
+NUM_CUSTOMERS = 20
+MAP_X = 100
+MAP_Y = 100
+POPULATION_SIZE = 150
+NUM_GENERATIONS = 1000
+MUTATION_RATE = 0.5
 NUM_ELITE = 15
 
-# Geração de dados (clientes e mapa)
-def gerar_clientes(num_clientes, mapa_x, mapa_y):
-    clientes = []
-    for i in range(1, num_clientes + 1):
-        clientes.append({
-            'id': i, 'x': random.randint(5, mapa_x - 5), 'y': random.randint(5, mapa_y - 5),
-            'demanda': random.randint(5, 15)
+def generate_customers(num_customers, map_x, map_y):
+    customers = []
+    for i in range(1, num_customers + 1):
+        start_window = random.randint(8, 14)  # Janela começa entre 8h e 14h
+        end_window = start_window + random.randint(2, 4)
+        customers.append({
+            'id': i, 'x': random.randint(5, map_x - 5), 'y': random.randint(5, map_y - 5),
+            'demand': random.randint(5, 15),
+            'window': (start_window, end_window)
         })
-    return clientes
+    return customers
 
-LISTA_CLIENTES = gerar_clientes(NUM_CLIENTES, MAPA_X, MAPA_Y)
-MAPA_DADOS = {cliente['id']: cliente for cliente in LISTA_CLIENTES}
-MAPA_DADOS[0] = DEPOSITO
+CUSTOMER_LIST = generate_customers(NUM_CUSTOMERS, MAP_X, MAP_Y)
+DATA_MAP = {customer['id']: customer for customer in CUSTOMER_LIST}
+DATA_MAP[0] = DEPOT
 
-# =============================================================================
-# ETAPA 3: FUNÇÕES DO ALGORITMO GENÉTICO
-# =============================================================================
+# --- Genetic Algorithm Functions ---
+def calculate_distance(id1, id2):
+    point1 = DATA_MAP[id1]
+    point2 = DATA_MAP[id2]
+    return math.sqrt((point1['x'] - point2['x'])**2 + (point1['y'] - point2['y'])**2)
 
-def calcular_distancia(id1, id2):
-    ponto1 = MAPA_DADOS[id1]
-    ponto2 = MAPA_DADOS[id2]
-    return math.sqrt((ponto1['x'] - ponto2['x'])**2 + (ponto1['y'] - ponto2['y'])**2)
+def calculate_route_cost_and_penalty(route, vehicle):
+    if not route:
+        return 0, []
 
-def calcular_custo_rota(rota, veiculo):
-    if not rota:
-        return 0
-    distancia_total = calcular_distancia(DEPOSITO['id'], rota[0])
-    for i in range(len(rota) - 1):
-        distancia_total += calcular_distancia(rota[i], rota[i+1])
-    distancia_total += calcular_distancia(rota[-1], DEPOSITO['id'])
-    return distancia_total * veiculo['custo_km']
+    cost = 0
+    time_penalty = 0
+    current_time = 0
+    last_location_id = DEPOT['id']
+    arrival_times = []
 
-def criar_individuo():
-    ids_clientes = [cliente['id'] for cliente in LISTA_CLIENTES]
-    random.shuffle(ids_clientes)
-    return ids_clientes
-
-def criar_populacao_inicial():
-    return [criar_individuo() for _ in range(TAMANHO_POPULACAO)]
-
-def calcular_fitness(individuo):
-    veiculos_embaralhados = VEICULOS[:]
-    random.shuffle(veiculos_embaralhados)
-    rotas_por_veiculo = {}
-    clientes_alocados = set()
-    for veiculo in veiculos_embaralhados:
-        rota_atual = []
-        demanda_atual = 0
-        rotas_por_veiculo[veiculo['id']] = rota_atual
-        for id_cliente in individuo:
-            if id_cliente not in clientes_alocados:
-                demanda_cliente = MAPA_DADOS[id_cliente]['demanda']
-                if demanda_atual + demanda_cliente <= veiculo['capacidade']:
-                    rota_atual.append(id_cliente)
-                    demanda_atual += demanda_cliente
-                    clientes_alocados.add(id_cliente)
-
-    if len(clientes_alocados) < NUM_CLIENTES:
-        return 0, rotas_por_veiculo
-
-    custo_total = sum(calcular_custo_rota(rota, next(v for v in VEICULOS if v['id'] == id_v)) for id_v, rota in rotas_por_veiculo.items())
-    return 1 / (1 + custo_total), rotas_por_veiculo
-
-def selecionar_por_torneio(populacao_avaliada):
-    participantes = random.sample(populacao_avaliada, 5)
-    participantes.sort(key=lambda item: item[1], reverse=True)
-    return participantes[0][0]
-
-def reproduzir(pai1, pai2):
-    tamanho = len(pai1)
-    ponto1, ponto2 = sorted(random.sample(range(tamanho), 2))
-    filho = [None] * tamanho
-    filho[ponto1:ponto2] = pai1[ponto1:ponto2]
-    genes_pai2 = [gene for gene in pai2 if gene not in filho]
-    idx_filho = 0
-    for gene in genes_pai2:
-        while filho[idx_filho] is not None:
-            idx_filho += 1
-        filho[idx_filho] = gene
-    return filho
-
-def aplicar_mutacao(individuo):
-    if random.random() < TAXA_MUTACAO:
-        i, j = random.sample(range(len(individuo)), 2)
-        individuo[i], individuo[j] = individuo[j], individuo[i]
-    return individuo
-
-# =============================================================================
-# ETAPA 4: FUNÇÃO PRINCIPAL DE RESOLUÇÃO
-# =============================================================================
-
-def resolver_vrp():
-    populacao = criar_populacao_inicial()
-    melhor_solucao_global = None
-    menor_custo_global = float('inf')
-    geracao_melhor_custo = -1
-
-    for i in range(NUM_GERACOES):
-        populacao_avaliada = []
-        for individuo in populacao:
-            fitness, rotas = calcular_fitness(individuo)
-            custo = (1 / fitness) - 1 if fitness > 0 else float('inf')
-            populacao_avaliada.append((individuo, fitness, custo, rotas))
-
-        populacao_avaliada.sort(key=lambda item: item[1], reverse=True)
+    for customer_id in route:
+        distance = calculate_distance(last_location_id, customer_id)
+        travel_time = distance / vehicle['speed_kmh']
+        current_time += travel_time
         
-        custo_atual = populacao_avaliada[0][2]
-        if custo_atual < menor_custo_global:
-            menor_custo_global = custo_atual
-            melhor_solucao_global = populacao_avaliada[0][3]
-            geracao_melhor_custo = i
-
-        nova_populacao = [ind[0] for ind in populacao_avaliada[:NUM_ELITE]]
-        while len(nova_populacao) < TAMANHO_POPULACAO:
-            pai1 = selecionar_por_torneio(populacao_avaliada)
-            pai2 = selecionar_por_torneio(populacao_avaliada)
-            filho = reproduzir(pai1, pai2)
-            filho = aplicar_mutacao(filho)
-            nova_populacao.append(filho)
+        customer_window = DATA_MAP[customer_id]['window']
         
-        populacao = nova_populacao
+        # Espera se chegar cedo
+        if current_time < customer_window[0]:
+            current_time = customer_window[0]
+        
+        # Penaliza se chegar atrasado
+        if current_time > customer_window[1]:
+            time_penalty += (current_time - customer_window[1]) * TIME_PENALTY_FACTOR
 
-    if melhor_solucao_global is None:
+        arrival_times.append(f"{int(current_time)}:{int((current_time*60)%60):02d}")
+        current_time += SERVICE_TIME_HOURS
+        last_location_id = customer_id
+
+    # Custo de volta ao depósito
+    distance_to_depot = calculate_distance(last_location_id, DEPOT['id'])
+    cost = (calculate_distance(DEPOT['id'], route[0]) + sum(calculate_distance(route[i], route[i+1]) for i in range(len(route)-1)) + distance_to_depot) * vehicle['cost_km']
+    
+    total_cost = cost + time_penalty
+    return total_cost, arrival_times
+
+
+def create_individual():
+    customer_ids = [customer['id'] for customer in CUSTOMER_LIST]
+    random.shuffle(customer_ids)
+    return customer_ids
+
+def create_initial_population():
+    return [create_individual() for _ in range(POPULATION_SIZE)]
+
+def calculate_fitness(individual):
+    shuffled_vehicles = VEHICLES[:]
+    random.shuffle(shuffled_vehicles)
+    routes_by_vehicle = {}
+    allocated_customers = set()
+
+    for vehicle in shuffled_vehicles:
+        current_route = []
+        current_demand = 0
+        routes_by_vehicle[vehicle['id']] = current_route
+        for customer_id in individual:
+            if customer_id not in allocated_customers:
+                customer_demand = DATA_MAP[customer_id]['demand']
+                if current_demand + customer_demand <= vehicle['capacity']:
+                    current_route.append(customer_id)
+                    current_demand += customer_demand
+                    allocated_customers.add(customer_id)
+
+    if len(allocated_customers) < NUM_CUSTOMERS:
+        return 0, {}
+
+    total_cost = 0
+    for v_id, route in routes_by_vehicle.items():
+        vehicle = next(v for v in VEHICLES if v['id'] == v_id)
+        route_cost, _ = calculate_route_cost_and_penalty(route, vehicle)
+        total_cost += route_cost
+
+    return 1 / (1 + total_cost), routes_by_vehicle
+
+def tournament_selection(evaluated_population):
+    participants = random.sample(evaluated_population, 5)
+    participants.sort(key=lambda item: item[1], reverse=True)
+    return participants[0][0]
+
+def crossover(parent1, parent2):
+    size = len(parent1)
+    child = [None] * size
+    start, end = sorted(random.sample(range(size), 2))
+    child[start:end+1] = parent1[start:end+1]
+    
+    parent2_genes = [gene for gene in parent2 if gene not in child]
+    
+    child_idx = 0
+    for gene in parent2_genes:
+        while child[child_idx] is not None:
+            child_idx += 1
+        child[child_idx] = gene
+    return child
+
+def apply_mutation(individual):
+    if random.random() < MUTATION_RATE:
+        mutation_type = random.random()
+        if mutation_type < 0.4:
+            start, end = sorted(random.sample(range(len(individual)), 2))
+            individual[start:end+1] = reversed(individual[start:end+1])
+        elif mutation_type < 0.8:
+            customer_idx = random.randrange(len(individual))
+            customer = individual.pop(customer_idx)
+            insert_point = random.randrange(len(individual) + 1)
+            individual.insert(insert_point, customer)
+        else:
+            i, j = random.sample(range(len(individual)), 2)
+            individual[i], individual[j] = individual[j], individual[i]
+    return individual
+
+# --- Main Solver Function ---
+def solve_vrp():
+    population = create_initial_population()
+    global_best_solution = None
+    global_lowest_cost = float('inf')
+    best_cost_generation = -1
+    generation_history = []
+
+    for i in range(NUM_GENERATIONS):
+        evaluated_population = []
+        total_cost_sum = 0
+        valid_solutions_count = 0
+
+        for individual in population:
+            fitness, routes = calculate_fitness(individual)
+            cost = (1 / fitness) - 1 if fitness > 0 else float('inf')
+            evaluated_population.append((individual, fitness, cost, routes))
+            if cost != float('inf'):
+                total_cost_sum += cost
+                valid_solutions_count += 1
+
+        evaluated_population.sort(key=lambda item: item[1], reverse=True)
+        
+        current_best_cost_in_gen = evaluated_population[0][2]
+        if current_best_cost_in_gen < global_lowest_cost:
+            global_lowest_cost = current_best_cost_in_gen
+            global_best_solution = evaluated_population[0][3]
+            best_cost_generation = i
+
+        average_cost = (total_cost_sum / valid_solutions_count) if valid_solutions_count > 0 else 0
+        
+        if i == 1 or (i+1) %20 ==0 or i == NUM_GENERATIONS :
+            generation_history.append(
+                GenerationStats(
+                    generation_number=i,
+                    best_cost=round(global_lowest_cost, 2),
+                    average_cost=round(average_cost, 2)
+                )
+            )
+
+        elite = [ind[0] for ind in evaluated_population[:NUM_ELITE]]
+        new_population = elite
+        
+        while len(new_population) < POPULATION_SIZE:
+            parent1 = tournament_selection(evaluated_population)
+            parent2 = tournament_selection(evaluated_population)
+            child = crossover(parent1, parent2)
+            child = apply_mutation(child)
+            new_population.append(child)
+        
+        population = new_population
+
+    if global_best_solution is None:
         return None
 
     return {
-        "menor_custo_global": menor_custo_global,
-        "geracao_melhor_custo": geracao_melhor_custo,
-        "melhor_solucao_global": melhor_solucao_global
+        "best_cost_generation": best_cost_generation,
+        "global_best_solution": global_best_solution,
+        "generation_history": generation_history
     }
 
-# =============================================================================
-# ETAPA 5: ROTAS DA API
-# =============================================================================
-
-@app.get("/", summary="Mensagem de Boas-vindas")
+# --- API Endpoints ---
+@app.get("/", summary="Welcome Message", include_in_schema=False)
 def root():
-    return {"message": "Bem-vindo à API de Otimização de Rotas (VRP) com Algoritmo Genético"}
+    return {"message": "Welcome to the VRP with Time Windows API"}
 
-@app.get("/solve", 
-         response_model=SolucaoVRP,
-         summary="Executa o Algoritmo Genético para encontrar a melhor rota",
-         responses={404: {"model": MensagemErro, "description": "Solução não encontrada"}})
+
+@app.get("/customer", response_model=ProblemData,
+         summary="Get current problem data (depot and costumers)")
+
+def get_customers():
+
+    global CUSTOMER_LIST, DATA_MAP
+    DATA_MAP = {customer['id']: customer for customer in CUSTOMER_LIST}
+    DATA_MAP[0] = DEPOT 
+
+    depot_data = PointData(
+        id=DEPOT['id'],
+        x=DEPOT['x'],
+        y=DEPOT['y'],
+        demand=0,
+        window=TimeWindow(start=DEPOT['janela'][0], end=DEPOT['janela'][1])
+    )
+
+    customer_data_list = [
+        PointData(
+            id=c['id'],
+            x=c['x'],
+            y=c['y'],
+            demand=c['demand'],
+            window=TimeWindow(start=c['window'][0], end=c['window'][1])
+        ) for c in CUSTOMER_LIST
+    ]
+
+    return ProblemData(depot=depot_data, customers=customer_data_list)
+
+
+
+@app.get("/customer/generate", response_model=ProblemData,
+         summary="Get current problem data (depot and costumers)")
+
+def get_customers():
+
+    global CUSTOMER_LIST, DATA_MAP
+
+    CUSTOMER_LIST = generate_customers(NUM_CUSTOMERS, MAP_X, MAP_Y)
+
+    DATA_MAP = {customer['id']: customer for customer in CUSTOMER_LIST}
+    DATA_MAP[0] = DEPOT 
+
+    depot_data = PointData(
+        id=DEPOT['id'],
+        x=DEPOT['x'],
+        y=DEPOT['y'],
+        demand=0,
+        window=TimeWindow(start=DEPOT['janela'][0], end=DEPOT['janela'][1])
+    )
+
+    customer_data_list = [
+        PointData(
+            id=c['id'],
+            x=c['x'],
+            y=c['y'],
+            demand=c['demand'],
+            window=TimeWindow(start=c['window'][0], end=c['window'][1])
+        ) for c in CUSTOMER_LIST
+    ]
+
+    return ProblemData(depot=depot_data, customers=customer_data_list)
+
+
+
+@app.get("/solve",
+         response_model=VRPSolution,
+         summary="Executes the GA to find the best solution with time windows",
+         responses={404: {"model": ErrorMessage, "description": "Solution not found"}})
 def solve():
-    """
-    Executa o algoritmo genético para resolver o Problema de Roteamento de Veículos.
-    
-    Retorna a melhor solução encontrada, incluindo o custo total, a geração em que foi
-    encontrada e os detalhes de cada rota.
-    """
-    resultado_execucao = resolver_vrp()
+    execution_result = solve_vrp()
 
-    if not resultado_execucao:
-        return {"detalhe": "Não foi possível encontrar uma solução viável com os parâmetros atuais."}
+    if not execution_result:
+        raise HTTPException(status_code=404, detail="Could not find a viable solution.")
 
-    custo_total_final = 0
-    rotas_detalhadas = []
+    final_total_cost = 0
+    detailed_routes = []
     
-    solucao = resultado_execucao["melhor_solucao_global"]
+    solution = execution_result["global_best_solution"]
     
-    for id_veiculo, rota in solucao.items():
-        if not rota:
+    for vehicle_id, route in solution.items():
+        if not route:
             continue
             
-        veiculo_usado = next(v for v in VEICULOS if v['id'] == id_veiculo)
+        used_vehicle = next(v for v in VEHICLES if v['id'] == vehicle_id)
+        demand = sum(DATA_MAP[cid]['demand'] for cid in route)
+        cost, arrival_times = calculate_route_cost_and_penalty(route, used_vehicle)
         
-        demanda = sum(MAPA_DADOS[cid]['demanda'] for cid in rota)
+        distance = 0
+        if route:
+            distance += calculate_distance(DEPOT['id'], route[0])
+            for i in range(len(route) - 1):
+                distance += calculate_distance(route[i], route[i+1])
+            distance += calculate_distance(route[-1], DEPOT['id'])
         
-        distancia = calcular_distancia(DEPOSITO['id'], rota[0])
-        for i in range(len(rota) - 1):
-            distancia += calcular_distancia(rota[i], rota[i+1])
-        distancia += calcular_distancia(rota[-1], DEPOSITO['id'])
-        
-        custo = distancia * veiculo_usado['custo_km']
-        custo_total_final += custo
+        final_total_cost += cost
 
-        rotas_detalhadas.append(
-            RotaDetalhada(
-                id_veiculo=id_veiculo,
-                tipo_veiculo=veiculo_usado['tipo'],
-                trajeto=rota,
-                demanda_total=demanda,
-                distancia_km=round(distancia, 2),
-                custo_rota=round(custo, 2)
+        detailed_routes.append(
+            DetailedRoute(
+                vehicle_id=vehicle_id,
+                vehicle_type=used_vehicle['type'],
+                path=route,
+                total_demand=demand,
+                distance_km=round(distance, 2),
+                route_cost=round(cost, 2),
+                arrival_times=arrival_times
             )
         )
 
-    return SolucaoVRP(
-        melhor_custo_total=round(custo_total_final, 2),
-        geracao_encontrado=resultado_execucao["geracao_melhor_custo"],
-        detalhes_rotas=rotas_detalhadas
+    return VRPSolution(
+        best_total_cost=round(final_total_cost, 2),
+        found_at_generation=execution_result["best_cost_generation"],
+        route_details=detailed_routes,
+        generation_history=execution_result["generation_history"]
     )
-
