@@ -1,0 +1,70 @@
+import { Component, OnInit} from '@angular/core';
+import { CustomerData, DeliveryPlanService, PointData, VRPSolution } from '../../services/delivery-plan.service';
+import { HttpClient } from '@angular/common/http';
+import {MatProgressSpinner} from '@angular/material/progress-spinner'
+import { MatCardModule } from '@angular/material/card';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatListModule } from '@angular/material/list';
+import { MatChipsModule } from '@angular/material/chips';
+import { CommonModule } from '@angular/common'; 
+import { MatTableModule } from '@angular/material/table';
+import { MatIconModule } from '@angular/material/icon';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+
+@Component({
+  selector: 'app-home',
+  standalone: true,
+  imports: [CommonModule, MatProgressSpinner, MatIconModule, MatCardModule, MatTableModule, MatDividerModule, MatDividerModule, MatListModule, MatChipsModule],
+  templateUrl: './home.component.html',
+  styleUrl: './home.component.scss'
+})
+
+export class HomeComponent implements OnInit{
+  customerData?: PointData[];
+  data?: VRPSolution;
+  isLoading = true;
+
+  displayedColumnsRoutes: String[] = ['vehicle_id', 'vehicle_type', 'path', 'total_demand', 'distance_km', 'route_cost'];
+  displayedColumnsHistory: string[] = ['generation_number', 'best_cost', 'avarage_cost'];
+
+
+  constructor(
+    private deliveryPlanService:DeliveryPlanService, 
+    private sanitizer: DomSanitizer){
+
+  }
+
+  ngOnInit(): void{
+    this.deliveryPlanService.getSolution().subscribe({
+      next: (res: VRPSolution) => {
+        this.data = res;
+        this.isLoading =false;
+      },
+      error:(err) =>{
+        console.error('Error for fetching data from FAST API: ', err);
+        this.isLoading = false;
+      }
+    });
+  
+  }
+  
+  getGenerateNewCustomers(): void{
+    this.deliveryPlanService.getGenerateNewCustomers().subscribe({
+      next: (res: PointData[]) => {
+        this.customerData = res;
+        this.isLoading = false;
+      },
+      error:(err) =>{
+        console.error('Error for fetching data from FAST API: ', err);
+        this.isLoading = false;
+      }
+    });
+  }
+
+
+  getSanitizedImageUrl(base64String: string): SafeResourceUrl {
+    return this.sanitizer.bypassSecurityTrustResourceUrl('data:image/png;base64,' + base64String);
+  }
+
+
+}

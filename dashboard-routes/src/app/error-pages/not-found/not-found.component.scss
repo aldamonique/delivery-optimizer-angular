@@ -1,0 +1,24 @@
+
+.not-found-container{
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80vh;
+    
+    mat-card{
+        padding: 50px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    mat-card-title{
+        padding: 40px;
+    }
+    mat-card button{
+        margin-top: 20px;
+        border-radius: 6px;
+        border-color: #fafafa;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+
+    }
+}

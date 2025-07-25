@@ -1,0 +1,35 @@
+<div class="container">
+
+
+    <div *ngIf="isLoading" class="loading-spinner">
+        <p>Fetching the best solution...</p>
+        <mat-spinner color="primary" diameter="100"></mat-spinner>
+
+    </div>
+    <div *ngIf="!isLoading && data">
+        <mat-card class="summary-card">
+            <mat-card-header> 
+                <mat-card-title>Optmized Delivery Plan</mat-card-title>
+                <mat-card-subtitle>Summary of the found solution</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content class="summary-content"> 
+                <div>
+                    <span>Total Cost</span>
+                    <p>{{data.best_total_cost | currency: 'BRL'}}</p>
+                </div>
+            
+                <div>
+                    <span>Generation Found</span>
+                    <p>{{data.found_at_generation}}</p>
+                </div>
+            </mat-card-content>
+        </mat-card>
+
+
+
+        <img [src]="getSanitizedImageUrl(data!.solution_image_base64)" alt="Gráfico da melhor rota encontrada">
+    </div>
+
+
+</div>
+
