@@ -10,11 +10,11 @@ import {MatIconModule} from '@angular/material/icon';
 import {MatToolbarModule} from '@angular/material/toolbar';
 import { FormsModule } from '@angular/forms';
 import { isPlatformBrowser, JsonPipe } from '@angular/common';
-
+import { NavbarComponent } from "./layout/navbar/navbar.component";
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, MatIconModule, MatSlideToggleModule, MatToolbarModule, FormsModule],
+  imports: [RouterOutlet, NavbarComponent, MatIconModule, MatSlideToggleModule, MatToolbarModule, FormsModule, NavbarComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })

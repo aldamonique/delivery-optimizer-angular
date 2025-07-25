@@ -1,6 +1,26 @@
 <div class="container">
 
 
+    <aside class="sidebar">
+    
+    <mat-nav-list>
+      <a mat-list-item href="#" class="active-link"><mat-icon>home</mat-icon> Home</a>
+      <a mat-list-item href="#"><mat-icon>folder_open</mat-icon> Projetos</a>
+      <a mat-list-item href="#"><mat-icon>check_box</mat-icon> Tarefas</a>
+      <a mat-list-item href="#"><mat-icon>group</mat-icon> Equipa</a>
+      <a mat-list-item href="#"><mat-icon>settings</mat-icon> Definições</a>
+    </mat-nav-list>
+
+    <div class="upgrade-card">
+      <h4>Upgrade para Pro</h4>
+      <p>Obtenha 1 mês grátis e desbloqueie mais funcionalidades.</p>
+      <button mat-flat-button color="primary">Upgrade</button>
+    </div>
+  </aside>
+
+
+
+
     <div *ngIf="isLoading" class="loading-spinner">
         <p>Fetching the best solution...</p>
         <mat-spinner color="primary" diameter="100"></mat-spinner>
