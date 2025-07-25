@@ -8,12 +8,11 @@ import matplotlib.pyplot as plt
 import io
 import base64
 
-
 # --- API Metadata ---
 app = FastAPI(
     title="Vehicle Routing Problem (VRP) Optimization API",
     description="Uses a Genetic Algorithm with Time Windows to solve the VRP.",
-    version="3.0.0"
+    version="4.1.0"
 )
 
 origins = ["http://localhost:4200"]
@@ -27,7 +26,6 @@ app.add_middleware(
 )
 
 # --- Pydantic Models ---
-
 class TimeWindow(BaseModel):
     start: float
     end: float
@@ -73,9 +71,9 @@ VEHICLES = [
     {'id': 2, 'type': 'medium', 'capacity': 80, 'cost_km': 1.5, 'speed_kmh': 40},
     {'id': 3, 'type': 'large', 'capacity': 100, 'cost_km': 2.0, 'speed_kmh': 40}
 ]
-DEPOT = {'id': 0, 'x': 50, 'y': 50, 'janela': (0, 24)} 
-SERVICE_TIME_HOURS = 0.25  
-TIME_PENALTY_FACTOR = 100 
+DEPOT = {'id': 0, 'x': 50, 'y': 50, 'janela': (0, 24)}
+SERVICE_TIME_HOURS = 0.25
+TIME_PENALTY_FACTOR = 100
 
 # --- Genetic Algorithm Parameters ---
 NUM_CUSTOMERS = 20
@@ -89,7 +87,7 @@ NUM_ELITE = 15
 def generate_customers(num_customers, map_x, map_y):
     customers = []
     for i in range(1, num_customers + 1):
-        start_window = random.randint(8, 14)  # Janela começa entre 8h e 14h
+        start_window = random.randint(8, 14)
         end_window = start_window + random.randint(2, 4)
         customers.append({
             'id': i, 'x': random.randint(5, map_x - 5), 'y': random.randint(5, map_y - 5),
@@ -125,11 +123,9 @@ def calculate_route_cost_and_penalty(route, vehicle):
         
         customer_window = DATA_MAP[customer_id]['window']
         
-        # Espera se chegar cedo
         if current_time < customer_window[0]:
             current_time = customer_window[0]
         
-        # Penaliza se chegar atrasado
         if current_time > customer_window[1]:
             time_penalty += (current_time - customer_window[1]) * TIME_PENALTY_FACTOR
 
@@ -137,13 +133,12 @@ def calculate_route_cost_and_penalty(route, vehicle):
         current_time += SERVICE_TIME_HOURS
         last_location_id = customer_id
 
-    # Custo de volta ao depósito
     distance_to_depot = calculate_distance(last_location_id, DEPOT['id'])
-    cost = (calculate_distance(DEPOT['id'], route[0]) + sum(calculate_distance(route[i], route[i+1]) for i in range(len(route)-1)) + distance_to_depot) * vehicle['cost_km']
+    full_distance = calculate_distance(DEPOT['id'], route[0]) + sum(calculate_distance(route[i], route[i+1]) for i in range(len(route)-1)) + distance_to_depot
+    cost = full_distance * vehicle['cost_km']
     
     total_cost = cost + time_penalty
     return total_cost, arrival_times
-
 
 def create_individual():
     customer_ids = [customer['id'] for customer in CUSTOMER_LIST]
@@ -174,12 +169,7 @@ def calculate_fitness(individual):
     if len(allocated_customers) < NUM_CUSTOMERS:
         return 0, {}
 
-    total_cost = 0
-    for v_id, route in routes_by_vehicle.items():
-        vehicle = next(v for v in VEHICLES if v['id'] == v_id)
-        route_cost, _ = calculate_route_cost_and_penalty(route, vehicle)
-        total_cost += route_cost
-
+    total_cost = sum(calculate_route_cost_and_penalty(route, next(v for v in VEHICLES if v['id'] == v_id))[0] for v_id, route in routes_by_vehicle.items())
     return 1 / (1 + total_cost), routes_by_vehicle
 
 def tournament_selection(evaluated_population):
@@ -218,6 +208,43 @@ def apply_mutation(individual):
             individual[i], individual[j] = individual[j], individual[i]
     return individual
 
+def generate_plot_base64(solution):
+    # CORREÇÃO: 'figsize' em vez de 'fig_size'
+    fig, ax = plt.subplots(figsize=(8, 8))
+    
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+
+    depot_data = DATA_MAP[0]
+    ax.scatter(depot_data['x'], depot_data['y'], c='red', marker='s', s=120, label='Depot', zorder=5)
+
+    customers_x = [data['x'] for id, data in DATA_MAP.items() if id != 0]
+    customers_y = [data['y'] for id, data in DATA_MAP.items() if id != 0]
+    # CORREÇÃO: Cor hexadecimal com 6 dígitos
+    ax.scatter(customers_x, customers_y, c='#555555', s=60, label='Customers')
+
+    for i, (vehicle_id, route) in enumerate(solution.items()):
+        if not route:
+            continue
+        color = colors[i % len(colors)]
+        vehicle_type = next(v['type'] for v in VEHICLES if v['id'] == vehicle_id)
+        points_x = [DEPOT['x']] + [DATA_MAP[cid]['x'] for cid in route] + [DEPOT['x']]
+        # CORREÇÃO: Erro de digitação na list comprehension
+        points_y = [DEPOT['y']] + [DATA_MAP[cid]['y'] for cid in route] + [DEPOT['y']]
+        ax.plot(points_x, points_y, 'o-', color=color, label=f'Vehicle Route ({vehicle_type})')
+    
+    ax.set_title('Best Routing Solution', fontsize=16)
+    ax.set_xlabel('X Coordinate')
+    ax.set_ylabel('Y Coordinate')
+    ax.legend(loc='upper right')
+    ax.grid(False)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png')
+    plt.close(fig)
+
+    image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    return image_base64
+
 # --- Main Solver Function ---
 def solve_vrp():
     population = create_initial_population()
@@ -249,7 +276,7 @@ def solve_vrp():
 
         average_cost = (total_cost_sum / valid_solutions_count) if valid_solutions_count > 0 else 0
         
-        if i == 1 or (i+1) %20 ==0 or i == NUM_GENERATIONS :
+        if i == 0 or (i + 1) % 20 == 0 or i == NUM_GENERATIONS - 1:
             generation_history.append(
                 GenerationStats(
                     generation_number=i,
@@ -284,76 +311,21 @@ def solve_vrp():
 def root():
     return {"message": "Welcome to the VRP with Time Windows API"}
 
-
-@app.get("/customer", response_model=ProblemData,
-         summary="Get current problem data (depot and costumers)")
-
-def get_customers():
-
-    global CUSTOMER_LIST, DATA_MAP
-    DATA_MAP = {customer['id']: customer for customer in CUSTOMER_LIST}
-    DATA_MAP[0] = DEPOT 
-
-    depot_data = PointData(
-        id=DEPOT['id'],
-        x=DEPOT['x'],
-        y=DEPOT['y'],
-        demand=0,
-        window=TimeWindow(start=DEPOT['janela'][0], end=DEPOT['janela'][1])
-    )
-
-    customer_data_list = [
-        PointData(
-            id=c['id'],
-            x=c['x'],
-            y=c['y'],
-            demand=c['demand'],
-            window=TimeWindow(start=c['window'][0], end=c['window'][1])
-        ) for c in CUSTOMER_LIST
-    ]
-
+@app.get("/customer", response_model=ProblemData, summary="Get the current problem data")
+def get_current_problem():
+    depot_data = PointData(id=DEPOT['id'], x=DEPOT['x'], y=DEPOT['y'], demand=0, window=TimeWindow(start=DEPOT['janela'][0], end=DEPOT['janela'][1]))
+    customer_data_list = [PointData(id=c['id'], x=c['x'], y=c['y'], demand=c['demand'], window=TimeWindow(start=c['window'][0], end=c['window'][1])) for c in CUSTOMER_LIST]
     return ProblemData(depot=depot_data, customers=customer_data_list)
 
-
-
-@app.get("/customer/generate", response_model=ProblemData,
-         summary="Get current problem data (depot and costumers)")
-
-def get_customers():
-
+@app.get("/customer/generate", response_model=ProblemData, summary="Generate a new random problem instance")
+def generate_new_problem():
     global CUSTOMER_LIST, DATA_MAP
-
     CUSTOMER_LIST = generate_customers(NUM_CUSTOMERS, MAP_X, MAP_Y)
-
     DATA_MAP = {customer['id']: customer for customer in CUSTOMER_LIST}
     DATA_MAP[0] = DEPOT 
+    return get_current_problem()
 
-    depot_data = PointData(
-        id=DEPOT['id'],
-        x=DEPOT['x'],
-        y=DEPOT['y'],
-        demand=0,
-        window=TimeWindow(start=DEPOT['janela'][0], end=DEPOT['janela'][1])
-    )
-
-    customer_data_list = [
-        PointData(
-            id=c['id'],
-            x=c['x'],
-            y=c['y'],
-            demand=c['demand'],
-            window=TimeWindow(start=c['window'][0], end=c['window'][1])
-        ) for c in CUSTOMER_LIST
-    ]
-
-    return ProblemData(depot=depot_data, customers=customer_data_list)
-
-
-
-@app.get("/solve",
-         response_model=VRPSolution,
-         summary="Executes the GA to find the best solution with time windows",
-         responses={404: {"model": ErrorMessage, "description": "Solution not found"}})
+@app.get("/solve", response_model=VRPSolution, summary="Executes the GA to find the best solution")
 def solve():
     execution_result = solve_vrp()
 
@@ -368,7 +340,7 @@ def solve():
     for vehicle_id, route in solution.items():
         if not route:
             continue
-            
+        
         used_vehicle = next(v for v in VEHICLES if v['id'] == vehicle_id)
         demand = sum(DATA_MAP[cid]['demand'] for cid in route)
         cost, arrival_times = calculate_route_cost_and_penalty(route, used_vehicle)
@@ -393,10 +365,14 @@ def solve():
                 arrival_times=arrival_times
             )
         )
+    
+    image_data = generate_plot_base64(solution)
 
     return VRPSolution(
         best_total_cost=round(final_total_cost, 2),
         found_at_generation=execution_result["best_cost_generation"],
         route_details=detailed_routes,
-        generation_history=execution_result["generation_history"]
+        generation_history=execution_result["generation_history"],
+        # CORREÇÃO: Erro de digitação no nome do campo
+        solution_image_base64=image_data
     )
