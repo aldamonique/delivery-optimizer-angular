@@ -23,6 +23,8 @@ export class HomeComponent implements OnInit{
   customerData?: PointData[];
   data?: VRPSolution;
   isLoading = true;
+  errorMessage: string | null = null;
+
 
   displayedColumnsRoutes: String[] = ['vehicle_id', 'vehicle_type', 'path', 'total_demand', 'distance_km', 'route_cost'];
   displayedColumnsHistory: string[] = ['generation_number', 'best_cost', 'avarage_cost'];
@@ -35,24 +37,32 @@ export class HomeComponent implements OnInit{
   }
 
   ngOnInit(): void{
+    this.loadSolution();
+  
+  }
+
+  loadSolution(): void{
     this.deliveryPlanService.getSolution().subscribe({
       next: (res: VRPSolution) => {
         this.data = res;
-        this.isLoading =false;
-      },
-      error:(err) =>{
-        console.error('Error for fetching data from FAST API: ', err);
         this.isLoading = false;
+        this.errorMessage = null;
+
+      },
+      error: (err) => {
+        console.log('Error loading solution: ', err);
+        this.isLoading=false;
+        this.errorMessage = 'Failed to load the delivery plan. Please try again.'
       }
-    });
-  
+    })
   }
   
   getGenerateNewCustomers(): void{
+    this.isLoading = true;
     this.deliveryPlanService.getGenerateNewCustomers().subscribe({
       next: (res: PointData[]) => {
         this.customerData = res;
-        this.isLoading = false;
+        this.loadSolution();
       },
       error:(err) =>{
         console.error('Error for fetching data from FAST API: ', err);

@@ -1,12 +1,15 @@
 import random
 import math
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
-import matplotlib.pyplot as plt
 import io
 import base64
+from threading import Lock
 
 # --- API Metadata ---
 app = FastAPI(
@@ -83,6 +86,8 @@ POPULATION_SIZE = 150
 NUM_GENERATIONS = 1000
 MUTATION_RATE = 0.5
 NUM_ELITE = 15
+
+lock = Lock()
 
 def generate_customers(num_customers, map_x, map_y):
     customers = []
@@ -305,6 +310,11 @@ def solve_vrp():
         "global_best_solution": global_best_solution,
         "generation_history": generation_history
     }
+
+def clear_cache():
+    global best_solution_cache
+    with lock:
+        best_solution_cache = None
 
 # --- API Endpoints ---
 @app.get("/", summary="Welcome Message", include_in_schema=False)
