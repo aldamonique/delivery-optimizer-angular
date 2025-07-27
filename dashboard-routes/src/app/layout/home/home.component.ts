@@ -63,6 +63,7 @@ export class HomeComponent implements OnInit{
       next: (res: PointData[]) => {
         this.customerData = res;
         this.loadSolution();
+        this.getSanitizedImageUrl(this.data!.solution_image_base64);
       },
       error:(err) =>{
         console.error('Error for fetching data from FAST API: ', err);
