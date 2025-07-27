@@ -1,16 +1,16 @@
-<div class="container">
+<div class="dashboard-container">
   <aside class="sidebar">
     <mat-nav-list>
-      <a mat-list-item href="#" class="active-link"
-        ><mat-icon>home</mat-icon> Home</a
-      >
-       <button><a mat-list-item href="#"><mat-icon>folder_open</mat-icon>Generate new random clients </a></button>
+      <a mat-list-item href="#" class="active-link">
+        <mat-icon>home</mat-icon> Home
+      </a>
+      <a mat-list-item href="#">
+        <mat-icon>folder_open</mat-icon>Generate new random clients
+      </a>
       <a mat-list-item href="#"><mat-icon>check_box</mat-icon> Tarefas</a>
-      <a mat-list-item href="#"><mat-icon>group</mat-icon> Equipa</a>
+      <a mat-list-item href="/teste"><mat-icon>group</mat-icon> Equipa</a>
       <a mat-list-item href="#"><mat-icon>settings</mat-icon> Definições</a>
     </mat-nav-list>
-
-    
 
     <div class="upgrade-card">
       <h4>Upgrade para Pro</h4>
@@ -19,42 +19,84 @@
     </div>
   </aside>
 
-  <div *ngIf="isLoading" class="loading-spinner">
-    <p>Fetching the best solution...</p>
-    <mat-spinner color="primary" diameter="100"></mat-spinner>
-  </div>
+<div class="info-bar mat-elevation-z2" *ngIf="!isLoading && data">
+  <mat-card class="info-card" *ngFor="let data of data.route_details">
+    <div class="icon">
+      <mat-icon>{{ data.vehicle_type }}</mat-icon>
+    </div>
+    <div class="info-text">
+      <p class="title">{{ data.total_demand }}</p>
+      <p class="value">
+        {{ data.distance_km }}
+        <span class="change">{{ data.path }}</span>
+      </p>
+    </div>
+  </mat-card>
+</div>
 
-  <div *ngIf="!isLoading && data">
-  <h2 *ngIf="errorMessage" class="error-message">{{ errorMessage }}</h2>
 
-  <button (click)="getGenerateNewCustomers()">
-    Generate new random clients
-  </button>
-    <mat-card class="summary-card">
-      <mat-card-header>
-        <mat-card-title>Optmized Delivery Plan</mat-card-title>
-        <mat-card-subtitle>Summary of the found solution</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content class="summary-content">
-        <div>
-          <span>Total Cost</span>
-          <p>{{ data.best_total_cost | currency : "BRL" }}</p>
-        </div>
 
-        <div>
-          <span>Generation Found</span>
-          <p>{{ data.found_at_generation }}</p>
-        </div>
-      </mat-card-content>
-    </mat-card>
+  <div class="main-content">
+    <div *ngIf="isLoading" class="loading-spinner">
+      <p>Fetching the best solution...</p>
+      <!--<mat-spinner color="primary" diameter="100"></mat-spinner>-->
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    </div>
 
-    <mat-card class="summary-card">
-      <mat-card-content>
-        <img class="graph-container"
-          [src]="getSanitizedImageUrl(data!.solution_image_base64)"
-          alt="Gráfico da melhor rota encontrada"
-        />
-      </mat-card-content>
-    </mat-card>
+
+    <div *ngIf="!isLoading && data" class= "content-wrapper">
+      <h2 *ngIf="errorMessage" class="error-message">{{ errorMessage }}</h2>
+
+    <div class="container-button">
+      <button mat-flat-button color="primary" class="stylish-button" (click)="getGenerateNewCustomers()">
+        <mat-icon>autorenew</mat-icon>
+        Generate new random clients
+      </button>
+    </div>
+
+    
+      <mat-card class="summary-card">
+        <mat-card-header>
+          <mat-card-title>Optmized Delivery Plan</mat-card-title>
+          <mat-card-subtitle>Summary of the found solution</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content class="summary-content">
+          <div>
+            <span>Total Cost</span>
+            <p>{{ data.best_total_cost | currency : "BRL" }}</p>
+          </div>
+          <div>
+            <span>Generation Found</span>
+            <p>{{ data.found_at_generation }}</p>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <mat-card-header>
+          <mat-card-title>Optmized Delivery Plan</mat-card-title>
+          <mat-card-subtitle>Summary of the found solution</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content class="summary-content">
+          <div>
+            <span>Total Cost</span>
+            <p>{{ data.best_total_cost | currency : "BRL" }}</p>
+          </div>
+          <div>
+            <span>Generation Found</span>
+            <p>{{ data.found_at_generation }}</p>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <mat-card-content>
+          <img class="graph-container"
+            [src]="getSanitizedImageUrl(data!.solution_image_base64)"
+            alt="Gráfico da melhor rota encontrada"
+          />
+        </mat-card-content>
+      </mat-card>
+    </div>
   </div>
 </div>

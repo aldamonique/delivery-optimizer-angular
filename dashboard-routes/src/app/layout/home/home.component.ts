@@ -10,11 +10,11 @@ import { CommonModule } from '@angular/common';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-
+import {MatProgressBarModule} from '@angular/material/progress-bar';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, MatProgressSpinner, MatIconModule, MatCardModule, MatTableModule, MatDividerModule, MatDividerModule, MatListModule, MatChipsModule],
+  imports: [MatProgressBarModule, CommonModule, MatIconModule, MatCardModule, MatTableModule, MatDividerModule, MatDividerModule, MatListModule, MatChipsModule],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
 })
@@ -24,6 +24,7 @@ export class HomeComponent implements OnInit{
   data?: VRPSolution;
   isLoading = true;
   errorMessage: string | null = null;
+
 
 
   displayedColumnsRoutes: String[] = ['vehicle_id', 'vehicle_type', 'path', 'total_demand', 'distance_km', 'route_cost'];

@@ -1,3 +1,11 @@
+
+.container-navbar{
+  background-color: #215392;
+  padding: 0px;
+
+
+}
+
 .logo {
   font-family: "Inter", sans-serif;
   gap: 10px;
@@ -6,4 +14,17 @@
   display: flex;
   font-weight: 600;
   align-items: center;
+  color: rgb(255, 255, 255);
+  span{
+    font-size: 30px;
+  }
+  .material-symbols-outlined{
+  color: rgb(255, 255, 255);
+  font-size: 50px;
+}
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
 }
