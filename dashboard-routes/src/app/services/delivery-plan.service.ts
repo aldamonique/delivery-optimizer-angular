@@ -40,6 +40,7 @@ export interface VRPSolution {
   route_details: DetailedRoute[];
   generation_history: GenerationStats[];
   solution_image_base64: string;
+  timestamp?: string;
 }
 
 

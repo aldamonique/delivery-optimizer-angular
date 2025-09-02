@@ -1,3 +1,17 @@
+<div class="top-bar">
+  <div class="metric"><mat-icon>attach_money</mat-icon> Total Cost: {{ data?.best_total_cost }}</div>
+  <div class="metric"><mat-icon>timeline</mat-icon> Generation: {{ data?.found_at_generation }}</div>
+
+  <!-- New: Route Summary -->
+  <div class="metric" *ngFor="let route of data?.route_details; let i = index">
+    <mat-icon>route</mat-icon> 
+    <span>R{{ i + 1 }}: {{ route.distance_km }} km → {{ route.path.join(',') }}</span>
+  </div>
+</div>
+
+
+
+
 <div class="dashboard-container">
   <aside class="sidebar">
     <mat-nav-list>
@@ -19,20 +33,7 @@
     </div>
   </aside>
 
-<div class="info-bar mat-elevation-z2" *ngIf="!isLoading && data">
-  <mat-card class="info-card" *ngFor="let data of data.route_details">
-    <div class="icon">
-      <mat-icon>{{ data.vehicle_type }}</mat-icon>
-    </div>
-    <div class="info-text">
-      <p class="title">{{ data.total_demand }}</p>
-      <p class="value">
-        {{ data.distance_km }}
-        <span class="change">{{ data.path }}</span>
-      </p>
-    </div>
-  </mat-card>
-</div>
+
 
 
 
@@ -44,7 +45,7 @@
     </div>
 
 
-    <div *ngIf="!isLoading && data" class= "content-wrapper">
+    <div *ngIf="!isLoading && data" class="content-wrapper">
       <h2 *ngIf="errorMessage" class="error-message">{{ errorMessage }}</h2>
 
     <div class="container-button">
@@ -55,22 +56,7 @@
     </div>
 
     
-      <mat-card class="summary-card">
-        <mat-card-header>
-          <mat-card-title>Optmized Delivery Plan</mat-card-title>
-          <mat-card-subtitle>Summary of the found solution</mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content class="summary-content">
-          <div>
-            <span>Total Cost</span>
-            <p>{{ data.best_total_cost | currency : "BRL" }}</p>
-          </div>
-          <div>
-            <span>Generation Found</span>
-            <p>{{ data.found_at_generation }}</p>
-          </div>
-        </mat-card-content>
-      </mat-card>
+
 
       <mat-card class="summary-card">
         <mat-card-header>

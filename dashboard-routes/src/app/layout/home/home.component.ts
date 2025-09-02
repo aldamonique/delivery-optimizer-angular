@@ -27,7 +27,7 @@ export class HomeComponent implements OnInit{
 
 
 
-  displayedColumnsRoutes: String[] = ['vehicle_id', 'vehicle_type', 'path', 'total_demand', 'distance_km', 'route_cost'];
+displayedColumnsRoutes: String[] = ['vehicle_id', 'vehicle_type', 'path', 'total_demand', 'distance_km', 'route_cost'];
   displayedColumnsHistory: string[] = ['generation_number', 'best_cost', 'avarage_cost'];
 
 
