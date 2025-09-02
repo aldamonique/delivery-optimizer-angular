@@ -1,82 +1,91 @@
-import { Component, OnInit} from '@angular/core';
-import { CustomerData, DeliveryPlanService, PointData, VRPSolution } from '../../services/delivery-plan.service';
-import { HttpClient } from '@angular/common/http';
-import {MatProgressSpinner} from '@angular/material/progress-spinner'
+import { Component, OnInit, ViewChild } from '@angular/core';
+import { DeliveryPlanService, VRPSolution, DetailedRoute } from '../../services/delivery-plan.service';
+import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
-import { MatDividerModule } from '@angular/material/divider';
-import { MatListModule } from '@angular/material/list';
-import { MatChipsModule } from '@angular/material/chips';
-import { CommonModule } from '@angular/common'; 
-import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
+import { MatListModule } from '@angular/material/list';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTableModule } from '@angular/material/table';
+import { MatSort, MatSortModule } from '@angular/material/sort';
+import { MatButtonModule } from '@angular/material/button';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import {MatProgressBarModule} from '@angular/material/progress-bar';
+
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [MatProgressBarModule, CommonModule, MatIconModule, MatCardModule, MatTableModule, MatDividerModule, MatDividerModule, MatListModule, MatChipsModule],
+  imports: [
+    CommonModule,
+    MatCardModule,
+    MatIconModule,
+    MatListModule,
+    MatProgressBarModule,
+    MatTableModule,
+    MatSortModule,
+    MatButtonModule
+  ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
 })
-
-export class HomeComponent implements OnInit{
-  customerData?: PointData[];
+export class HomeComponent implements OnInit {
   data?: VRPSolution;
   isLoading = true;
   errorMessage: string | null = null;
 
+  totalDistance = 0;
+  vehiclesUsed = 0;
 
+  displayedColumns: string[] = ['vehicle_id', 'vehicle_type', 'path', 'total_demand', 'distance_km', 'route_cost'];
+  dataSource: DetailedRoute[] = [];
 
-displayedColumnsRoutes: String[] = ['vehicle_id', 'vehicle_type', 'path', 'total_demand', 'distance_km', 'route_cost'];
-  displayedColumnsHistory: string[] = ['generation_number', 'best_cost', 'avarage_cost'];
-
+  @ViewChild(MatSort) sort!: MatSort;
 
   constructor(
-    private deliveryPlanService:DeliveryPlanService, 
-    private sanitizer: DomSanitizer){
+    private deliveryPlanService: DeliveryPlanService,
+    private sanitizer: DomSanitizer
+  ) {}
 
-  }
-
-  ngOnInit(): void{
+  ngOnInit(): void {
     this.loadSolution();
-  
   }
 
-  loadSolution(): void{
+  loadSolution(): void {
+    this.isLoading = true;
     this.deliveryPlanService.getSolution().subscribe({
       next: (res: VRPSolution) => {
         this.data = res;
+        this.dataSource = res.route_details;
+        this.processDataForDashboard(res);
         this.isLoading = false;
         this.errorMessage = null;
-
       },
       error: (err) => {
-        console.log('Error loading solution: ', err);
-        this.isLoading=false;
-        this.errorMessage = 'Failed to load the delivery plan. Please try again.'
-      }
-    })
-  }
-  
-  getGenerateNewCustomers(): void{
-    this.isLoading = true;
-    this.deliveryPlanService.getGenerateNewCustomers().subscribe({
-      next: (res: PointData[]) => {
-        this.customerData = res;
-        this.loadSolution();
-        this.getSanitizedImageUrl(this.data!.solution_image_base64);
-      },
-      error:(err) =>{
-        console.error('Error for fetching data from FAST API: ', err);
+        console.error('Error loading solution:', err);
         this.isLoading = false;
+        this.errorMessage = 'Failed to load delivery plan. Please try again.';
       }
     });
   }
 
+  generateNewSolution(): void {
+    this.isLoading = true;
+    this.deliveryPlanService.getGenerateNewCustomers().subscribe({
+      next: () => {
+        this.loadSolution();
+      },
+      error: (err) => {
+        console.error('Error generating new customers:', err);
+        this.isLoading = false;
+        this.errorMessage = 'Failed to generate new data. Please try again.';
+      }
+    });
+  }
 
   getSanitizedImageUrl(base64String: string): SafeResourceUrl {
     return this.sanitizer.bypassSecurityTrustResourceUrl('data:image/png;base64,' + base64String);
   }
-
-
+  
+  private processDataForDashboard(data: VRPSolution): void {
+    this.totalDistance = data.route_details.reduce((sum, route) => sum + route.distance_km, 0);
+    this.vehiclesUsed = data.route_details.length;
+  }
 }

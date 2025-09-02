@@ -1,88 +1,132 @@
-<div class="top-bar">
-  <div class="metric"><mat-icon>attach_money</mat-icon> Total Cost: {{ data?.best_total_cost }}</div>
-  <div class="metric"><mat-icon>timeline</mat-icon> Generation: {{ data?.found_at_generation }}</div>
-
-  <!-- New: Route Summary -->
-  <div class="metric" *ngFor="let route of data?.route_details; let i = index">
-    <mat-icon>route</mat-icon> 
-    <span>R{{ i + 1 }}: {{ route.distance_km }} km → {{ route.path.join(',') }}</span>
-  </div>
-</div>
 
 
-
-
-<div class="dashboard-container">
+<div class="dashboard-container" *ngIf="!isLoading && data; else loading">
   <aside class="sidebar">
-    <mat-nav-list>
-      <a mat-list-item href="#" class="active-link">
-        <mat-icon>home</mat-icon> Home
-      </a>
-      <a mat-list-item href="#">
-        <mat-icon>folder_open</mat-icon>Generate new random clients
-      </a>
-      <a mat-list-item href="#"><mat-icon>check_box</mat-icon> Tarefas</a>
-      <a mat-list-item href="/teste"><mat-icon>group</mat-icon> Equipa</a>
-      <a mat-list-item href="#"><mat-icon>settings</mat-icon> Definições</a>
-    </mat-nav-list>
-
-    <div class="upgrade-card">
-      <h4>Upgrade para Pro</h4>
-      <p>Obtenha 1 mês grátis e desbloqueie mais funcionalidades.</p>
-      <button mat-flat-button color="primary">Upgrade</button>
+    <div class="logo">
+      <mat-icon>local_shipping</mat-icon>
+      <span>VRP Optimizer</span>
     </div>
+
+
+    <mat-card class="fleet-summary-card" *ngIf="data">
+      <mat-card-header>
+        <mat-card-title>Fleet in Use</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <mat-list>
+          <mat-list-item *ngFor="let route of data.route_details">
+            <mat-icon matListItemIcon>directions_car</mat-icon>
+            <div matListItemTitle>Vehicle {{route.vehicle_id}} ({{route.vehicle_type}})</div>
+            <div matListItemLine>{{route.distance_km.toFixed(2)}} km</div>
+          </mat-list-item>
+        </mat-list>
+      </mat-card-content>
+    </mat-card>
   </aside>
 
-
-
-
-
-  <div class="main-content">
-    <div *ngIf="isLoading" class="loading-spinner">
-      <p>Fetching the best solution...</p>
-      <!--<mat-spinner color="primary" diameter="100"></mat-spinner>-->
-      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-    </div>
-
-
-    <div *ngIf="!isLoading && data" class="content-wrapper">
-      <h2 *ngIf="errorMessage" class="error-message">{{ errorMessage }}</h2>
-
-    <div class="container-button">
-      <button mat-flat-button color="primary" class="stylish-button" (click)="getGenerateNewCustomers()">
+  <main class="main-content">
+    <header class="main-header">
+      <h1>Optimization Dashboard</h1>
+      <button mat-flat-button color="primary" class="generate-button" (click)="generateNewSolution()">
         <mat-icon>autorenew</mat-icon>
-        Generate new random clients
+        Generate New Solution
       </button>
-    </div>
+    </header>
 
-    
-
-
-      <mat-card class="summary-card">
-        <mat-card-header>
-          <mat-card-title>Optmized Delivery Plan</mat-card-title>
-          <mat-card-subtitle>Summary of the found solution</mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content class="summary-content">
-          <div>
-            <span>Total Cost</span>
-            <p>{{ data.best_total_cost | currency : "BRL" }}</p>
-          </div>
-          <div>
-            <span>Generation Found</span>
-            <p>{{ data.found_at_generation }}</p>
-          </div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="summary-card">
+    <div class="kpi-grid">
+      <mat-card class="kpi-card">
         <mat-card-content>
-          <img class="graph-container"
-            [src]="getSanitizedImageUrl(data!.solution_image_base64)"
-            alt="Gráfico da melhor rota encontrada"
-          />
+          <div class="kpi-icon"><mat-icon>monetization_on</mat-icon></div>
+          <div class="kpi-title">Total Cost</div>
+          <div class="kpi-value">{{ data.best_total_cost | currency:'BRL' }}</div>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <mat-card-content>
+          <div class="kpi-icon"><mat-icon>moving</mat-icon></div>
+          <div class="kpi-title">Total Distance</div>
+          <div class="kpi-value">{{ totalDistance.toFixed(2) }} km</div>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <mat-card-content>
+          <div class="kpi-icon"><mat-icon>local_shipping</mat-icon></div>
+          <div class="kpi-title">Vehicles Used</div>
+          <div class="kpi-value">{{ vehiclesUsed }}</div>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <mat-card-content>
+          <div class="kpi-icon"><mat-icon>speed</mat-icon></div>
+          <div class="kpi-title">Found at Generation</div>
+          <div class="kpi-value">{{ data.found_at_generation }}</div>
         </mat-card-content>
       </mat-card>
     </div>
-  </div>
+
+    <div class="content-grid">
+        <mat-card class="grid-item">
+            <mat-card-header>
+                <mat-card-title>Best Solution Map</mat-card-title>
+                <mat-card-subtitle>Visual representation of the optimized routes</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content class="graph-container">
+                <img 
+                    [src]="getSanitizedImageUrl(data!.solution_image_base64)"
+                    alt="Graph of the best route found"
+                />
+            </mat-card-content>
+        </mat-card>
+
+        <mat-card class="grid-item routes-table-container">
+            <mat-card-header>
+                <mat-card-title>Route Details</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+                <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z2">
+                    
+                    <ng-container matColumnDef="vehicle_id">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header> ID </th>
+                        <td mat-cell *matCellDef="let element"> V-{{element.vehicle_id}} </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="vehicle_type">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header> Type </th>
+                        <td mat-cell *matCellDef="let element"> {{element.vehicle_type}} </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="path">
+                        <th mat-header-cell *matHeaderCellDef> Path </th>
+                        <td mat-cell *matCellDef="let element" class="path-cell"> 0 → {{element.path.join(' → ')}} → 0 </td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="total_demand">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header> Demand </th>
+                        <td mat-cell *matCellDef="let element"> {{element.total_demand}} </td>
+                    </ng-container>
+                    
+                    <ng-container matColumnDef="distance_km">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header> Distance </th>
+                        <td mat-cell *matCellDef="let element"> {{element.distance_km.toFixed(2)}} km </td>
+                    </ng-container>
+                    
+                    <ng-container matColumnDef="route_cost">
+                        <th mat-header-cell *matHeaderCellDef mat-sort-header> Cost </th>
+                        <td mat-cell *matCellDef="let element"> {{element.route_cost | currency:'BRL'}} </td>
+                    </ng-container>
+
+                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+                </table>
+            </mat-card-content>
+        </mat-card>
+    </div>
+  </main>
 </div>
+
+<ng-template #loading>
+  <div class="loading-overlay">
+    <p>Optimizing routes, please wait...</p>
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  </div>
+</ng-template>
